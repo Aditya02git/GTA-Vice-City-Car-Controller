@@ -43,7 +43,7 @@ export default class Loader {
             margin-bottom: 20px;
         `;
 
-        // Add CSS animation if not already added
+        // Add CSS animation 
         if (!document.getElementById('loader-styles')) {
             const style = document.createElement('style');
             style.id = 'loader-styles';
