@@ -5,6 +5,7 @@ import * as CANNON from 'cannon-es'
 import Stats from 'stats.js';
 import Car from './world/car';
 
+
 var stats = new Stats();
 stats.showPanel(0); // 0: fps
 document.body.appendChild(stats.dom);
@@ -97,7 +98,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 const timeStep = 1 / 60;
 let lastCallTime;
 
-const tick = () => {
+const animate = () => {
     stats.begin();
 
     const time = performance.now() / 1000;
@@ -127,7 +128,7 @@ const tick = () => {
     renderer.render(scene, camera);
     stats.end();
 
-    window.requestAnimationFrame(tick);
+    window.requestAnimationFrame(animate);
 }
 
-tick();
+animate();

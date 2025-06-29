@@ -1,17 +1,17 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import Loader from '../loader/Loader.js';
 
 export default class Car {
     followTarget = new THREE.Object3D()
     pivot
-    constructor(scene, world, pivot) {
+    constructor(scene, world, pivot, loadingManager) {
         this.scene = scene;
         this.world = world;
+        this.loadingManager = loadingManager;
         
-
         this.car = {};
         this.chassis = {};
         this.wheels = [];
@@ -30,10 +30,21 @@ export default class Car {
             hindWheel: 1.1
         };
         this.mass = 500; // change the mass to get effect => less it will be a super car & more  it will be a bulldozer
-        this.pivot = pivot
+        this.pivot = pivot;
+        
+        // Initialize loader
+        this.loader = new Loader(5, 'Loading Car Models...');
+        this.isLoaded = false;
+        
+        // Set up completion callback
+        this.loader.setOnComplete(() => {
+            this.isLoaded = true;
+            console.log('Car models loaded successfully!');
+        });
     }
 
     init() {
+        this.loader.show();
         this.loadModels();
         this.setChassis();
         this.setWheels();
@@ -42,42 +53,70 @@ export default class Car {
     }
 
     loadModels() {
-        const gltfLoader = new GLTFLoader();
-        const dracoLoader = new DRACOLoader();
+        const gltfLoader = new GLTFLoader(this.loadingManager);
+        const dracoLoader = new DRACOLoader(this.loadingManager);
 
         dracoLoader.setDecoderConfig({ type: 'js' });
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
 
         gltfLoader.setDRACOLoader(dracoLoader);
 
-        gltfLoader.load("./car/dodge.glb", gltf => {
-            this.chassis = gltf.scene;
-            
-            this.chassis.traverse(function (object) {
-                if (object.isMesh) {
-                    object.castShadow = true;
-                    // object.material = new THREE.MeshToonMaterial({color: 0xFF55BB})
-                }
-            });
-            this.chassis.scale.set(0.4, 0.4, 0.4);
+        // Load chassis
+        gltfLoader.load(
+            "./car/dodge.glb", 
+            gltf => {
+                this.chassis = gltf.scene;
+                
+                this.chassis.traverse(function (object) {
+                    if (object.isMesh) {
+                        object.castShadow = true;
+                        // object.material = new THREE.MeshToonMaterial({color: 0xFF55BB})
+                    }
+                });
+                this.chassis.scale.set(0.4, 0.4, 0.4);
 
-            // Optional visual-only rotation (disabled because we're rotating the physics body)
-            // this.chassis.rotation.y = Math.PI / 2;
+                // Optional visual-only rotation (disabled because we're rotating the physics body)
+                // this.chassis.rotation.y = Math.PI / 2;
 
-            this.scene.add(this.chassis);
-        });
+                this.scene.add(this.chassis);
+                this.loader.updateProgress(1, 'Chassis');
+            },
+            progress => {
+                // Optional: Handle individual model loading progress
+                console.log('Chassis loading progress:', (progress.loaded / progress.total * 100) + '%');
+            },
+            error => {
+                console.error('Error loading chassis:', error);
+                this.loader.setTitle('Error loading chassis model');
+                this.loader.setDetails('Please check the model file path');
+            }
+        );
 
+        // Load wheels
         this.wheels = [];
         for (let i = 0; i < 4; i++) {
-            gltfLoader.load("./car/wheel.gltf", gltf => {
-                const model = gltf.scene;
-                this.wheels[i] = model;
-                if (i === 1 || i === 3)
-                    this.wheels[i].scale.set(-1 * this.wheelScale.frontWheel, 1 * this.wheelScale.frontWheel, -1 * this.wheelScale.frontWheel);
-                else
-                    this.wheels[i].scale.set(1 * this.wheelScale.frontWheel, 1 * this.wheelScale.frontWheel, 1 * this.wheelScale.frontWheel);
-                this.scene.add(this.wheels[i]);
-            });
+            gltfLoader.load(
+                "./car/wheel.gltf", 
+                gltf => {
+                    const model = gltf.scene;
+                    this.wheels[i] = model;
+                    if (i === 1 || i === 3)
+                        this.wheels[i].scale.set(-1 * this.wheelScale.frontWheel, 1 * this.wheelScale.frontWheel, -1 * this.wheelScale.frontWheel);
+                    else
+                        this.wheels[i].scale.set(1 * this.wheelScale.frontWheel, 1 * this.wheelScale.frontWheel, 1 * this.wheelScale.frontWheel);
+                    this.scene.add(this.wheels[i]);
+                    this.loader.updateProgress(1, `Wheel ${i + 1}`);
+                },
+                progress => {
+                    // Optional: Handle individual wheel loading progress
+                    console.log(`Wheel ${i} loading progress:`, (progress.loaded / progress.total * 100) + '%');
+                },
+                error => {
+                    console.error(`Error loading wheel ${i}:`, error);
+                    this.loader.setTitle(`Error loading wheel ${i + 1}`);
+                    this.loader.setDetails('Please check the wheel model file path');
+                }
+            );
         }
     }
 
@@ -162,10 +201,12 @@ export default class Car {
         const keysPressed = [];
 
         window.addEventListener('keydown', (e) => {
+            if (!this.isLoaded) return; // Prevent controls until loaded
             if (!keysPressed.includes(e.key.toLowerCase())) keysPressed.push(e.key.toLowerCase());
             hindMovement();
         });
         window.addEventListener('keyup', (e) => {
+            if (!this.isLoaded) return; // Prevent controls until loaded
             keysPressed.splice(keysPressed.indexOf(e.key.toLowerCase()), 1);
             hindMovement();
         });
@@ -267,5 +308,29 @@ export default class Car {
             }
         };
         this.world.addEventListener('postStep', updateWorld);
+    }
+
+    // Public methods to interact with loader
+    showLoader() {
+        this.loader.show();
+    }
+
+    hideLoader() {
+        this.loader.hide();
+    }
+
+    isModelLoaded() {
+        return this.isLoaded;
+    }
+
+    getLoader() {
+        return this.loader;
+    }
+
+    // Clean up method
+    destroy() {
+        if (this.loader) {
+            this.loader.destroy();
+        }
     }
 }
